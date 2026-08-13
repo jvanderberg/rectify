@@ -15,6 +15,7 @@ let toastTimer;
 
 function showView(view) {
   views.forEach(v => v.classList.toggle('hidden', v !== view));
+  document.body.dataset.view = view.id.replace('View', '');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -78,7 +79,7 @@ function renderSource() {
   sourceCanvas.height = Math.round(targetH * scale);
   const stage = $('#editorStage');
   stage.style.aspectRatio = `${sourceCanvas.width} / ${sourceCanvas.height}`;
-  stage.style.maxWidth = `calc(62vh * ${sourceCanvas.width / sourceCanvas.height})`;
+  stage.style.setProperty('--image-ratio', sourceCanvas.width / sourceCanvas.height);
   sourceCtx.save();
   sourceCtx.translate(sourceCanvas.width / 2, sourceCanvas.height / 2);
   sourceCtx.rotate(rotation * Math.PI / 180);
