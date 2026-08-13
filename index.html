@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#f4f1e8" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="description" content="Straighten printed photos with private, on-device perspective correction." />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
@@ -61,16 +63,15 @@
         </div>
       </section>
 
-      <section id="editView" class="view edit-view hidden" aria-labelledby="editTitle">
-        <div class="step-heading">
+      <section id="editView" class="view edit-view hidden" aria-label="Photo corner editor">
+        <div class="edit-top-controls">
           <button id="backButton" class="icon-button" aria-label="Start over"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button>
-          <div><p class="eyebrow">STEP 1 OF 2</p><h2 id="editTitle">Line up the corners</h2></div>
           <button id="rotateButton" class="icon-button" aria-label="Rotate image"><svg viewBox="0 0 24 24"><path d="M4 8V4m0 0h4M4 4l3 3a7 7 0 1 1-1 8"/></svg></button>
         </div>
-        <p class="instruction">Drag each dot to a corner of the printed photo.</p>
         <div id="editorStage" class="editor-stage">
           <canvas id="sourceCanvas"></canvas>
           <svg id="cropOverlay" class="crop-overlay" aria-label="Adjustable crop boundary">
+            <rect class="touch-surface" width="100%" height="100%"></rect>
             <polygon id="cropPolygon"></polygon>
             <g id="handles"></g>
           </svg>
@@ -78,8 +79,8 @@
         </div>
         <div id="cornerLoupe" class="corner-loupe hidden" aria-hidden="true"><canvas id="loupeCanvas" width="140" height="140"></canvas></div>
         <div class="edit-footer">
-          <button id="autoButton" class="secondary-button"><svg viewBox="0 0 24 24"><path d="m12 3 1.4 4.2L18 8.5l-4.6 1.3L12 14l-1.4-4.2L6 8.5l4.6-1.3zM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></svg> Auto-detect</button>
-          <button id="straightenButton" class="primary-button">Straighten photo <svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg></button>
+          <button id="autoButton" class="editor-action" aria-label="Detect corners again"><svg viewBox="0 0 24 24"><path d="m12 3 1.4 4.2L18 8.5l-4.6 1.3L12 14l-1.4-4.2L6 8.5l4.6-1.3zM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></svg></button>
+          <button id="straightenButton" class="editor-action editor-done" aria-label="Straighten photo"><svg viewBox="0 0 24 24"><path d="m6 12 4 4 8-9"/></svg></button>
         </div>
       </section>
 

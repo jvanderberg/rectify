@@ -30,8 +30,8 @@ function toast(message) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 2300);
 }
 
-$('#cameraButton').addEventListener('click', () => $('#cameraInput').click());
-$('#libraryButton').addEventListener('click', () => $('#libraryInput').click());
+$('#cameraButton').addEventListener('click', () => openPicker($('#cameraInput')));
+$('#libraryButton').addEventListener('click', () => openPicker($('#libraryInput')));
 $('#cameraInput').addEventListener('change', loadSelection);
 $('#libraryInput').addEventListener('change', loadSelection);
 $('#backButton').addEventListener('click', reset);
@@ -43,6 +43,16 @@ $('#saveButton').addEventListener('click', saveResult);
 $('#infoButton').addEventListener('click', () => $('#infoDialog').showModal());
 $('#closeInfo').addEventListener('click', () => $('#infoDialog').close());
 $('#infoDialog').addEventListener('click', e => { if (e.target === $('#infoDialog')) $('#infoDialog').close(); });
+
+function openPicker(input) {
+  try {
+    if (!document.fullscreenElement) {
+      const fullscreenRequest = document.documentElement.requestFullscreen?.({ navigationUI: 'hide' });
+      fullscreenRequest?.catch(() => {});
+    }
+  } catch {}
+  input.click();
+}
 
 async function loadSelection(event) {
   const file = event.target.files?.[0];
@@ -122,9 +132,9 @@ function drawCrop() {
     group.classList.add('crop-handle'); group.dataset.index = i;
     group.setAttribute('transform', `translate(${p.x} ${p.y})`);
     const hit = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    hit.setAttribute('r', String(28 * unitsPerPixel)); hit.classList.add('hit');
+    hit.setAttribute('r', String(40 * unitsPerPixel)); hit.classList.add('hit');
     const outer = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    outer.setAttribute('r', String(13 * unitsPerPixel)); outer.classList.add('outer');
+    outer.setAttribute('r', String(16 * unitsPerPixel)); outer.classList.add('outer');
     const inner = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     inner.setAttribute('r', String(4.5 * unitsPerPixel)); inner.classList.add('inner');
     inner.setAttribute('pointer-events', 'none');
@@ -133,9 +143,9 @@ function drawCrop() {
 }
 
 overlay.addEventListener('pointerdown', event => {
-  const handle = event.target.closest('.crop-handle');
-  if (!handle) return;
-  dragging = Number(handle.dataset.index);
+  event.preventDefault();
+  const touch = eventToImagePoint(event, false);
+  dragging = points.reduce((best, point, index) => distance(point, touch) < distance(points[best], touch) ? index : best, 0);
   overlay.setPointerCapture(event.pointerId);
   cornerLoupe.classList.remove('hidden');
   updateDrag(event);
@@ -145,13 +155,18 @@ overlay.addEventListener('pointerup', event => { dragging = -1; cornerLoupe.clas
 overlay.addEventListener('pointercancel', () => { dragging = -1; cornerLoupe.classList.add('hidden'); });
 
 function updateDrag(event) {
-  const rect = overlay.getBoundingClientRect();
-  points[dragging] = {
-    x: clamp((event.clientX - rect.left) * sourceCanvas.width / rect.width, 0, sourceCanvas.width),
-    y: clamp((event.clientY - rect.top) * sourceCanvas.height / rect.height, 0, sourceCanvas.height)
-  };
+  points[dragging] = eventToImagePoint(event, true);
   drawCrop();
   drawLoupe(points[dragging], event);
+}
+
+function eventToImagePoint(event, offsetForFinger) {
+  const rect = overlay.getBoundingClientRect();
+  const fingerOffset = offsetForFinger && event.pointerType !== 'mouse' ? 72 : 0;
+  return {
+    x: clamp((event.clientX - rect.left) * sourceCanvas.width / rect.width, 0, sourceCanvas.width),
+    y: clamp((event.clientY - fingerOffset - rect.top) * sourceCanvas.height / rect.height, 0, sourceCanvas.height)
+  };
 }
 
 function drawLoupe(point, event) {
@@ -184,9 +199,9 @@ async function autoDetect() {
   try {
     points = detectQuadrilateral(sourceCanvas);
     drawCrop();
-    toast('Edges found — adjust if needed.');
+    // The outline is the feedback; keep the editor visually quiet.
   } catch {
-    points = defaultPoints(); drawCrop(); toast('Drag the dots to the photo corners.');
+    points = defaultPoints(); drawCrop();
   } finally { $('#detecting').classList.add('hidden'); }
 }
 
