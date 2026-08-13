@@ -1,4 +1,6 @@
-importScripts('fast-detector.js', 'detector.js');
+const build = new URL(self.location.href).searchParams.get('v') || 'dev';
+self.RECTIFY_BUILD = build;
+importScripts(`fast-detector.js?v=${encodeURIComponent(build)}`, `detector.js?v=${encodeURIComponent(build)}`);
 
 async function openCvReady() {
   if (self.cv instanceof Promise) self.cv = await self.cv;
@@ -18,7 +20,7 @@ self.onmessage = async event => {
       const result = RectifyFastDetector.detectRgba(pixels, width, height);
       if (result.confidence >= .7) return self.postMessage({ id, points: result.points, detector: 'lines' });
     } catch {}
-    importScripts('opencv.js');
+    importScripts(`opencv.js?v=${encodeURIComponent(build)}`);
     const cv = await openCvReady();
     const points = RectifyDetector.detectRgba(pixels, width, height, cv);
     self.postMessage({ id, points, detector: 'opencv' });

@@ -12,7 +12,7 @@ python3 -m http.server 8080
 
 Open `http://localhost:8080`. Camera access requires HTTPS when not using localhost.
 
-Run the lightweight detector regression suite with `node tests/fast-detector.test.js`.
+Run the regression checks with `node tests/fast-detector.test.js` and `node tests/cache-version.test.js`.
 
 ## Privacy
 

@@ -77,6 +77,8 @@ dialog::backdrop { background:rgba(18,40,38,.62); backdrop-filter:blur(3px); }
 .dialog-close { position:absolute; top:12px; right:12px; }
 dialog p { color:var(--muted); line-height:1.6; }
 .tip { border-left:3px solid var(--coral); padding:2px 0 2px 16px; }
+.build-id { margin:24px 0 0; color:#929994; font-size:.72rem; }
+.build-id code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
 .toast { position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom)); z-index:20; padding:11px 17px; border-radius:999px; color:white; background:var(--ink); transform:translate(-50%,20px); opacity:0; pointer-events:none; transition:.25s; font-size:.85rem; box-shadow:0 8px 25px rgba(0,0,0,.2); }
 .toast.show { transform:translate(-50%,0); opacity:1; }
 

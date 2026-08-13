@@ -3,6 +3,7 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.RectifyDetector = api;
 })(typeof self !== 'undefined' ? self : this, function () {
+  const assetVersion = typeof globalThis !== 'undefined' && globalThis.RECTIFY_BUILD ? `?v=${encodeURIComponent(globalThis.RECTIFY_BUILD)}` : '';
   let openCvPromise;
   let worker;
   let workerRequest = 0;
@@ -14,7 +15,7 @@
     if (openCvPromise) return openCvPromise;
     openCvPromise = new Promise((resolve, reject) => {
       const script = document.createElement('script');
-      script.src = 'opencv.js';
+      script.src = `opencv.js${assetVersion}`;
       script.async = true;
       script.onerror = () => reject(new Error('Could not load the on-device detector'));
       script.onload = async () => {
@@ -61,7 +62,7 @@
     ctx.drawImage(canvas, 0, 0, width, height);
     const image = ctx.getImageData(0, 0, width, height);
     if (!worker) {
-      worker = new Worker('detector-worker.js');
+      worker = new Worker(`detector-worker.js${assetVersion}`);
       worker.onmessage = event => {
         const request = pending.get(event.data.id);
         if (!request) return;

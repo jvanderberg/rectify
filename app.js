@@ -303,7 +303,30 @@ function distance(a,b) { return Math.hypot(a.x-b.x,a.y-b.y); }
 function clamp(n,min,max) { return Math.max(min,Math.min(max,n)); }
 function isValidQuad(p) { const signs=p.map((a,i)=>{const b=p[(i+1)%4],c=p[(i+2)%4];return Math.sign((b.x-a.x)*(c.y-b.y)-(b.y-a.y)*(c.x-b.x));}); return signs.every(s=>s===signs[0]&&s!==0); }
 
-if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
+const BUILD = window.RECTIFY_BUILD || 'dev';
+
+async function checkForBuild() {
+  try {
+    const response = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
+    const latest = (await response.json()).build;
+    if (latest && latest !== BUILD) location.replace(`./?v=${encodeURIComponent(latest)}`);
+  } catch {}
+}
+
+if ('serviceWorker' in navigator) window.addEventListener('load', async () => {
+  const reloadKey = `rectify-controller-${BUILD}`;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (sessionStorage.getItem(reloadKey)) return;
+    sessionStorage.setItem(reloadKey, '1');
+    location.reload();
+  });
+  try {
+    const registration = await navigator.serviceWorker.register(`sw.js?v=${encodeURIComponent(BUILD)}`, { updateViaCache: 'none' });
+    await registration.update();
+  } catch {}
+  checkForBuild();
+});
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForBuild(); });
 function resizeEditor() {
   if (sourceImage && !$('#editView').classList.contains('hidden')) {
     sizeEditorStage();
