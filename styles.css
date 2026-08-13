@@ -83,19 +83,30 @@ dialog p { color:var(--muted); line-height:1.6; }
 .toast.show { transform:translate(-50%,0); opacity:1; }
 
 @media (max-width:700px) {
-  .start-view { display:flex; flex-direction:column; min-height:auto; padding-top:42px; gap:30px; }
-  .demo-wrap { order:2; min-height:290px; width:min(100%,420px); margin:auto; }
-  .start-actions { order:3; width:100%; align-items:stretch; }
+  .topbar { height:60px; }
+  .start-view { display:flex; flex-direction:column; min-height:calc(100dvh - 60px); padding:24px 18px max(20px,env(safe-area-inset-bottom)); gap:22px; }
+  .start-actions { order:2; width:100%; align-items:stretch; gap:8px; }
   .start-actions .primary-button { width:100%; }
-  h1 { font-size:clamp(3.25rem,16vw,4.8rem); }
-  .lede { margin-top:18px; }
+  .start-actions .text-button { align-self:center; }
+  .start-actions .privacy-note { margin:2px 0 0; justify-content:center; }
+  .demo-wrap { order:3; min-height:290px; width:min(100%,420px); margin:auto; }
+  h1 { font-size:clamp(2.9rem,14vw,4.5rem); }
+  .lede { margin-top:16px; line-height:1.48; }
   .result-copy .eyebrow { margin-bottom:5px; }
   .result-copy h2 { font-size:2rem; }
   .result-copy p:last-child { margin:5px 0 0; font-size:.84rem; }
   .result-actions { gap:10px 20px; }
 }
+@media (max-width:700px) and (max-height:700px) {
+  .start-view { padding-top:16px; gap:16px; }
+  .eyebrow { margin-bottom:8px; }
+  h1 { font-size:clamp(2.65rem,13vw,3.45rem); }
+  .lede { margin-top:12px; font-size:.94rem; line-height:1.38; }
+  .demo-wrap { display:none; }
+}
 @media (max-height:520px) and (orientation:landscape) {
   .edit-footer { right:max(8px,env(safe-area-inset-right)); }
 }
-@media (display-mode:standalone) { .topbar { padding-top:env(safe-area-inset-top); height:calc(68px + env(safe-area-inset-top)); } }
+@media (display-mode:standalone) { .topbar { padding-top:env(safe-area-inset-top); height:calc(60px + env(safe-area-inset-top)); } }
+@media (display-mode:standalone) and (max-width:700px) { .start-view { min-height:calc(100dvh - 60px - env(safe-area-inset-top)); } }
 @media (prefers-reduced-motion:reduce) { * { scroll-behavior:auto !important; transition:none !important; animation-duration:.01ms !important; } }

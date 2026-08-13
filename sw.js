@@ -1,4 +1,4 @@
-const BUILD='20260813.2';
+const BUILD='20260813.3';
 const CACHE=`rectify-${BUILD}`;
 const versioned=path=>`${path}?v=${BUILD}`;
 const INDEX=versioned('index.html');
