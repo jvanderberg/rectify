@@ -2,7 +2,7 @@
   "name": "Rectify — Photo Straightener",
   "short_name": "Rectify",
   "description": "Turn snapshots of printed photos into clean rectangular images.",
-  "start_url": "./?v=20260813.1",
+  "start_url": "./?v=20260813.2",
   "scope": "./",
   "display": "fullscreen",
   "background_color": "#f4f1e8",

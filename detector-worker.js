@@ -1,30 +1,44 @@
 const build = new URL(self.location.href).searchParams.get('v') || 'dev';
 self.RECTIFY_BUILD = build;
-importScripts(`fast-detector.js?v=${encodeURIComponent(build)}`, `detector.js?v=${encodeURIComponent(build)}`);
+importScripts(
+  `ort.wasm.min.js?v=${encodeURIComponent(build)}`,
+  `model-detector.js?v=${encodeURIComponent(build)}`,
+  `fast-detector.js?v=${encodeURIComponent(build)}`
+);
 
-async function openCvReady() {
-  if (self.cv instanceof Promise) self.cv = await self.cv;
-  const started = Date.now();
-  while (!self.cv?.Mat) {
-    if (Date.now() - started > 10000) throw new Error('OpenCV initialization timed out');
-    await new Promise(resolve => setTimeout(resolve, 20));
+ort.env.wasm.numThreads = 1;
+ort.env.wasm.proxy = false;
+ort.env.wasm.wasmPaths = {
+  mjs: `ort-wasm-simd-threaded.mjs?v=${encodeURIComponent(build)}`,
+  wasm: `ort-wasm-simd-threaded.wasm?v=${encodeURIComponent(build)}`
+};
+
+let sessionPromise;
+function modelSession() {
+  if (!sessionPromise) {
+    sessionPromise = ort.InferenceSession.create(`docaligner-lcnet100.onnx?v=${encodeURIComponent(build)}`, {
+      executionProviders: ['wasm'],
+      graphOptimizationLevel: 'all'
+    });
   }
-  return self.cv;
+  return sessionPromise;
 }
 
 self.onmessage = async event => {
-  const { id, rgba, width, height } = event.data;
+  const { id, type, rgba, width, height } = event.data;
   try {
+    const session = await modelSession();
+    if (type === 'warmup') return self.postMessage({ id, ready: true });
     const pixels = new Uint8ClampedArray(rgba);
+    const points = await RectifyModelDetector.detect(session, ort.Tensor, pixels, width, height);
+    self.postMessage({ id, points, detector: 'docaligner' });
+  } catch (modelError) {
+    if (type === 'warmup') return self.postMessage({ id, error: modelError?.message || 'Model initialization failed' });
     try {
-      const result = RectifyFastDetector.detectRgba(pixels, width, height);
-      if (result.confidence >= .7) return self.postMessage({ id, points: result.points, detector: 'lines' });
-    } catch {}
-    importScripts(`opencv.js?v=${encodeURIComponent(build)}`);
-    const cv = await openCvReady();
-    const points = RectifyDetector.detectRgba(pixels, width, height, cv);
-    self.postMessage({ id, points, detector: 'opencv' });
-  } catch (error) {
-    self.postMessage({ id, error: error?.message || 'Boundary detection failed' });
+      const result = RectifyFastDetector.detectRgba(new Uint8ClampedArray(rgba), width, height);
+      self.postMessage({ id, points: result.points, detector: 'lines' });
+    } catch {
+      self.postMessage({ id, error: modelError?.message || 'Boundary detection failed' });
+    }
   }
 };

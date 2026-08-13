@@ -1,13 +1,17 @@
 # Third-party notices
 
-## OpenCV.js 4.13.0
+## DocAligner / LCNet100 model
 
-`opencv.js` is the official WebAssembly-enabled OpenCV.js 4.13.0 distribution from:
+The `docaligner-lcnet100.onnx` model is the DocAligner LCNet100 heatmap-regression model distributed by PageScan. DocAligner and the model weights are licensed under the Apache License 2.0.
 
-https://docs.opencv.org/4.13.0/opencv.js
+- Source: https://github.com/DocsaidLab/DocAligner
+- Weights: https://huggingface.co/7rplus/pagescan-weights
+- Model SHA-256: `f4117b786e3a18470f3865c93f3c2bd69d9b998edd60f385574a5c665e79594e`
+- License: https://www.apache.org/licenses/LICENSE-2.0
 
-SHA-256: `63366510248adf3a7eddf3e793dd825404efb7df3749f4d6f8557c7fa4ca8aa0`
+## ONNX Runtime Web
 
-OpenCV is licensed under the Apache License 2.0. Its license is available at:
+`ort.wasm.min.js`, `ort-wasm-simd-threaded.mjs`, and `ort-wasm-simd-threaded.wasm` are from ONNX Runtime Web 1.27.0, copyright Microsoft Corporation, licensed under the MIT License.
 
-https://github.com/opencv/opencv/blob/4.13.0/LICENSE
+- Source: https://github.com/microsoft/onnxruntime
+- License: https://github.com/microsoft/onnxruntime/blob/v1.27.0/LICENSE

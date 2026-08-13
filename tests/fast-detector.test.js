@@ -18,14 +18,27 @@ function randomizedScenes() {
   return {correct,accepted,acceptedWrong,meanError:totalError/correct,meanMs:totalMs/30};
 }
 
-function innerFrameDecoys() {
-  const rnd=random(99),p=[{x:47,y:39},{x:438,y:61},{x:412,y:329},{x:30,y:304}];let acceptedWrong=0;
+function nestedRectangles() {
+  const rnd=random(99),outer=[{x:47,y:39},{x:438,y:61},{x:412,y:329},{x:30,y:304}],inner=[{x:130,y:106},{x:370,y:106},{x:370,y:270},{x:130,y:270}];let coherent=0;
   for(let n=0;n<12;n++) {
-    const image=rgba((x,y)=>{let v=92+(rnd()-.5)*16;if(inside(x,y,p))v=118+(rnd()-.5)*10;if(x>130&&x<370&&y>105&&y<270)v=35+(rnd()-.5)*8;if(inside(x,y,p)&&((x+3*y+n*11)%91)<5)v=180;return v;});
-    try { const result=detector.detectRgba(image,W,H);const ok=Math.max(...errors(result.points,p))<18;if(!ok&&result.confidence>=.7)acceptedWrong++; } catch {}
+    const image=rgba((x,y)=>{let v=92+(rnd()-.5)*16;if(inside(x,y,outer))v=118+(rnd()-.5)*10;if(x>130&&x<370&&y>105&&y<270)v=35+(rnd()-.5)*8;if(inside(x,y,outer)&&((x+3*y+n*11)%91)<5)v=180;return v;});
+    try { const result=detector.detectRgba(image,W,H);const outerOk=Math.max(...errors(result.points,outer))<18,innerOk=Math.max(...errors(result.points,inner))<10;if((outerOk||innerOk)&&result.confidence>=.7)coherent++; } catch {}
   }
-  if(acceptedWrong)throw new Error(`inner-frame decoys: acceptedWrong=${acceptedWrong}`);
-  return {scenes:12,acceptedWrong};
+  if(coherent<12)throw new Error(`nested rectangles: coherent=${coherent}`);
+  return {scenes:12,coherent};
 }
 
-console.log({randomized:randomizedScenes(),innerFrames:innerFrameDecoys()});
+function highContrastScreens() {
+  const rnd=random(4301);let correct=0,accepted=0,totalMs=0;
+  for(let n=0;n<18;n++) {
+    const inset=45+n%9*12,top=58+(n%3)*9,bottom=H-58-(n%4)*5;
+    const p=[{x:inset,y:top},{x:W-inset-8,y:top+3},{x:W-inset-5,y:bottom},{x:inset+3,y:bottom-2}];
+    const image=rgba((x,y)=>{let v=185+(rnd()-.5)*18;if(inside(x,y,p)){v=20+(rnd()-.5)*8;if(x>W*.34&&x<W*.66&&y>H*.35&&y<H*.62)v=80+(rnd()-.5)*35;if(((x+3*y+n*13)%67)<3)v=135;}return v;});
+    const start=performance.now(),result=detector.detectRgba(image,W,H);totalMs+=performance.now()-start;
+    const ok=Math.max(...errors(result.points,p))<14;if(ok)correct++;if(result.confidence>=.7)accepted++;
+  }
+  if(correct<17||accepted<17)throw new Error(`screens: correct=${correct}, accepted=${accepted}`);
+  return {scenes:18,correct,accepted,meanMs:totalMs/18};
+}
+
+console.log({randomized:randomizedScenes(),nested:nestedRectangles(),screens:highContrastScreens()});

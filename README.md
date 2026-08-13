@@ -2,7 +2,9 @@
 
 An installable, offline-capable photo straightener. It detects the edges of a photographed print, lets the user refine all four corners, and performs perspective correction entirely in the browser.
 
-Boundary detection starts with a small line-based detector in a Web Worker: adaptive Sobel edges, a bounded Hough transform, opposite-line pairing, and quadrilateral scoring. Confident results return without loading WebAssembly. Uncertain images fall back to the official OpenCV.js 4.13 WebAssembly build (`opencv.js`, SHA-256 `63366510248adf3a7eddf3e793dd825404efb7df3749f4d6f8557c7fa4ca8aa0`) with a multi-pass contour pipeline and a 2.5-second overall cutoff. The WASM bundle loads on demand, is cached after its first use, and is preserved across app-shell cache upgrades.
+Boundary detection runs DocAligner's LCNet100 corner-heatmap model locally in a Web Worker using ONNX Runtime Web. Its initial four-corner estimate is refined against the image's full line gradients before the perspective correction is rendered. A small geometric detector remains as an offline-safe fallback if WebAssembly initialization fails.
+
+The model and runtime are pre-cached with the rest of the versioned PWA, warmed while the start screen is idle, and never upload the user's photo.
 
 ## Run locally
 

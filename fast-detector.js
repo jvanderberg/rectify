@@ -19,8 +19,9 @@
     candidates.sort((a, b) => b.score - a.score);
     const best = candidates[0];
     const runnerUp = candidates.find(c => cornerDifference(c.points, best.points) > Math.min(width, height) * .08);
-    const sizeConfidence = Math.max(0, Math.min(1, (best.areaRatio - .24) / .24));
-    best.confidence = Math.max(0, Math.min(1, (.52 + best.support * .5 + Math.min(.18, (best.score - (runnerUp?.score ?? best.score - .5)) * .12)) * sizeConfidence));
+    const continuityConfidence = clamp01((.3 - best.maxGapRatio) / .14);
+    const weakestSideConfidence = clamp01((best.minSideSupport - .35) / .35);
+    best.confidence = clamp01((.48 + best.support * .32 + best.minSideSupport * .22 + Math.min(.16, (best.score - (runnerUp?.score ?? best.score - .5)) * .1)) * continuityConfidence * weakestSideConfidence);
     return best;
   }
 
@@ -117,19 +118,20 @@
       if (angle < 30 || angle > 150) return null;
       anglePenalty += Math.abs(angle - 90) / 90;
     }
-    const support = boundarySupport(points, magnitude, threshold, width, height);
-    if (support < .34) return null;
+    const boundary = boundaryMetrics(points, magnitude, threshold, width, height);
+    if (boundary.support < .34) return null;
     const margin = Math.min(width, height) * .018;
     const borderCorners = points.filter(p => p.x < margin || p.y < margin || p.x > width - margin || p.y > height - margin).length;
     // Once an edge has credible support, prefer the outer print over strong
     // rectangular content inside it (frames, windows, screens, artwork).
-    return { points, support, areaRatio, score: support * 3.5 + areaRatio * 6.5 - anglePenalty * .55 - borderCorners * 1.25 };
+    return { points, areaRatio, ...boundary, score: boundary.support * 3.2 + boundary.minSideSupport * 1.4 + areaRatio * 5.4 - boundary.maxGapRatio * 2.2 - anglePenalty * .55 - borderCorners * 1.25 };
   }
 
-  function boundarySupport(points, magnitude, threshold, width, height) {
-    let hits = 0, samples = 0;
+  function boundaryMetrics(points, magnitude, threshold, width, height) {
+    let hits = 0, samples = 0, minSideSupport = 1, maxGapRatio = 0;
     for (let side = 0; side < 4; side++) {
       const a = points[side], b = points[(side + 1) % 4], count = Math.max(12, Math.round(distance(a, b) / 4));
+      let sideHits = 0, currentGap = 0, maxGap = 0;
       for (let i = 0; i <= count; i++) {
         const t = i / count, x = Math.round(a.x + (b.x - a.x) * t), y = Math.round(a.y + (b.y - a.y) * t);
         let strongest = 0;
@@ -137,10 +139,15 @@
           const sx = x + ox, sy = y + oy;
           if (sx >= 0 && sy >= 0 && sx < width && sy < height) strongest = Math.max(strongest, magnitude[sy * width + sx]);
         }
-        hits += strongest >= threshold ? 1 : 0; samples++;
+        const hit = strongest >= threshold;
+        if (hit) { sideHits++; currentGap = 0; }
+        else { currentGap++; maxGap = Math.max(maxGap, currentGap); }
+        hits += hit ? 1 : 0; samples++;
       }
+      minSideSupport = Math.min(minSideSupport, sideHits / (count + 1));
+      maxGapRatio = Math.max(maxGapRatio, maxGap / (count + 1));
     }
-    return hits / samples;
+    return { support: hits / samples, minSideSupport, maxGapRatio };
   }
 
   function intersect(one, two) { const d = one.a * two.b - two.a * one.b; return Math.abs(d) < .05 ? null : { x: (one.rho * two.b - two.rho * one.b) / d, y: (one.a * two.rho - two.a * one.rho) / d }; }
@@ -152,6 +159,7 @@
   function cornerAngle(a,b,c) { const u={x:a.x-b.x,y:a.y-b.y},v={x:c.x-b.x,y:c.y-b.y}; return Math.acos(Math.max(-1,Math.min(1,(u.x*v.x+u.y*v.y)/(Math.hypot(u.x,u.y)*Math.hypot(v.x,v.y)))))*180/Math.PI; }
   function pointInPolygon(p,poly) { let inside=false; for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];if((a.y>p.y)!=(b.y>p.y)&&p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x)inside=!inside;} return inside; }
   function cornerDifference(a,b) { return a.reduce((sum,p,i)=>sum+distance(p,b[i]),0)/4; }
+  function clamp01(value) { return Math.max(0, Math.min(1, value)); }
 
   return { detectRgba, orderPoints };
 });

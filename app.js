@@ -305,6 +305,10 @@ function isValidQuad(p) { const signs=p.map((a,i)=>{const b=p[(i+1)%4],c=p[(i+2)
 
 const BUILD = window.RECTIFY_BUILD || 'dev';
 
+const warmDetector = () => RectifyDetector?.warmup?.();
+if ('requestIdleCallback' in window) requestIdleCallback(warmDetector, { timeout: 1500 });
+else setTimeout(warmDetector, 250);
+
 async function checkForBuild() {
   try {
     const response = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
