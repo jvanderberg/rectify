@@ -7,6 +7,9 @@ const resultCtx = resultCanvas.getContext('2d');
 const overlay = $('#cropOverlay');
 const polygon = $('#cropPolygon');
 const handles = $('#handles');
+const cornerLoupe = $('#cornerLoupe');
+const loupeCanvas = $('#loupeCanvas');
+const loupeCtx = loupeCanvas.getContext('2d');
 let sourceImage = null;
 let points = [];
 let dragging = -1;
@@ -79,7 +82,7 @@ function renderSource() {
   sourceCanvas.height = Math.round(targetH * scale);
   const stage = $('#editorStage');
   stage.style.aspectRatio = `${sourceCanvas.width} / ${sourceCanvas.height}`;
-  stage.style.setProperty('--image-ratio', sourceCanvas.width / sourceCanvas.height);
+  sizeEditorStage();
   sourceCtx.save();
   sourceCtx.translate(sourceCanvas.width / 2, sourceCanvas.height / 2);
   sourceCtx.rotate(rotation * Math.PI / 180);
@@ -92,6 +95,19 @@ function renderSource() {
   });
 }
 
+function sizeEditorStage() {
+  if (!sourceCanvas.width || !sourceCanvas.height) return;
+  const viewport = window.visualViewport;
+  const vw = viewport?.width || window.innerWidth;
+  const vh = viewport?.height || window.innerHeight;
+  const ratio = sourceCanvas.width / sourceCanvas.height;
+  const width = vw / vh > ratio ? vh * ratio : vw;
+  const height = width / ratio;
+  const stage = $('#editorStage');
+  stage.style.width = `${Math.round(width)}px`;
+  stage.style.height = `${Math.round(height)}px`;
+}
+
 function defaultPoints() {
   const { width:w, height:h } = sourceCanvas;
   return [{x:w*.08,y:h*.08},{x:w*.92,y:h*.08},{x:w*.92,y:h*.92},{x:w*.08,y:h*.92}];
@@ -99,15 +115,20 @@ function defaultPoints() {
 
 function drawCrop() {
   polygon.setAttribute('points', points.map(p => `${p.x},${p.y}`).join(' '));
+  const rect = overlay.getBoundingClientRect();
+  const unitsPerPixel = rect.width ? sourceCanvas.width / rect.width : 1;
   handles.replaceChildren(...points.map((p, i) => {
     const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     group.classList.add('crop-handle'); group.dataset.index = i;
     group.setAttribute('transform', `translate(${p.x} ${p.y})`);
+    const hit = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    hit.setAttribute('r', String(28 * unitsPerPixel)); hit.classList.add('hit');
     const outer = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    outer.setAttribute('r', '18'); outer.classList.add('outer');
+    outer.setAttribute('r', String(13 * unitsPerPixel)); outer.classList.add('outer');
     const inner = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    inner.setAttribute('r', '5'); inner.classList.add('inner');
-    group.append(outer, inner); return group;
+    inner.setAttribute('r', String(4.5 * unitsPerPixel)); inner.classList.add('inner');
+    inner.setAttribute('pointer-events', 'none');
+    group.append(hit, outer, inner); return group;
   }));
 }
 
@@ -116,11 +137,12 @@ overlay.addEventListener('pointerdown', event => {
   if (!handle) return;
   dragging = Number(handle.dataset.index);
   overlay.setPointerCapture(event.pointerId);
+  cornerLoupe.classList.remove('hidden');
   updateDrag(event);
 });
 overlay.addEventListener('pointermove', event => { if (dragging >= 0) updateDrag(event); });
-overlay.addEventListener('pointerup', event => { dragging = -1; overlay.releasePointerCapture(event.pointerId); });
-overlay.addEventListener('pointercancel', () => { dragging = -1; });
+overlay.addEventListener('pointerup', event => { dragging = -1; cornerLoupe.classList.add('hidden'); overlay.releasePointerCapture(event.pointerId); });
+overlay.addEventListener('pointercancel', () => { dragging = -1; cornerLoupe.classList.add('hidden'); });
 
 function updateDrag(event) {
   const rect = overlay.getBoundingClientRect();
@@ -129,6 +151,30 @@ function updateDrag(event) {
     y: clamp((event.clientY - rect.top) * sourceCanvas.height / rect.height, 0, sourceCanvas.height)
   };
   drawCrop();
+  drawLoupe(points[dragging], event);
+}
+
+function drawLoupe(point, event) {
+  const rect = overlay.getBoundingClientRect();
+  const unitsPerPixel = sourceCanvas.width / rect.width;
+  const sample = 48 * unitsPerPixel;
+  loupeCtx.fillStyle = '#101817';
+  loupeCtx.fillRect(0, 0, loupeCanvas.width, loupeCanvas.height);
+  loupeCtx.drawImage(sourceCanvas, point.x - sample, point.y - sample, sample * 2, sample * 2, 0, 0, loupeCanvas.width, loupeCanvas.height);
+  loupeCtx.strokeStyle = 'rgba(255,255,255,.92)';
+  loupeCtx.lineWidth = 1.5;
+  loupeCtx.beginPath();
+  loupeCtx.moveTo(70, 46); loupeCtx.lineTo(70, 94);
+  loupeCtx.moveTo(46, 70); loupeCtx.lineTo(94, 70);
+  loupeCtx.stroke();
+  loupeCtx.strokeStyle = '#ef725f'; loupeCtx.lineWidth = 3;
+  loupeCtx.strokeRect(67, 67, 6, 6);
+  const onLeft = event.clientX < window.innerWidth / 2;
+  const nearTop = event.clientY < 190;
+  cornerLoupe.style.left = onLeft ? 'auto' : '12px';
+  cornerLoupe.style.right = onLeft ? '12px' : 'auto';
+  cornerLoupe.style.top = nearTop ? 'auto' : `max(82px, calc(env(safe-area-inset-top) + 72px))`;
+  cornerLoupe.style.bottom = nearTop ? `max(82px, calc(env(safe-area-inset-bottom) + 72px))` : 'auto';
 }
 
 async function autoDetect() {
@@ -241,3 +287,11 @@ function clamp(n,min,max) { return Math.max(min,Math.min(max,n)); }
 function isValidQuad(p) { const signs=p.map((a,i)=>{const b=p[(i+1)%4],c=p[(i+2)%4];return Math.sign((b.x-a.x)*(c.y-b.y)-(b.y-a.y)*(c.x-b.x));}); return signs.every(s=>s===signs[0]&&s!==0); }
 
 if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
+function resizeEditor() {
+  if (sourceImage && !$('#editView').classList.contains('hidden')) {
+    sizeEditorStage();
+    requestAnimationFrame(drawCrop);
+  }
+}
+window.addEventListener('resize', resizeEditor);
+window.visualViewport?.addEventListener('resize', resizeEditor);
