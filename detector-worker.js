@@ -2,8 +2,7 @@ const build = new URL(self.location.href).searchParams.get('v') || 'dev';
 self.RECTIFY_BUILD = build;
 importScripts(
   `ort.wasm.min.js?v=${encodeURIComponent(build)}`,
-  `model-detector.js?v=${encodeURIComponent(build)}`,
-  `fast-detector.js?v=${encodeURIComponent(build)}`
+  `model-detector.js?v=${encodeURIComponent(build)}`
 );
 
 ort.env.wasm.numThreads = 1;
@@ -34,11 +33,6 @@ self.onmessage = async event => {
     self.postMessage({ id, points, detector: 'docaligner' });
   } catch (modelError) {
     if (type === 'warmup') return self.postMessage({ id, error: modelError?.message || 'Model initialization failed' });
-    try {
-      const result = RectifyFastDetector.detectRgba(new Uint8ClampedArray(rgba), width, height);
-      self.postMessage({ id, points: result.points, detector: 'lines' });
-    } catch {
-      self.postMessage({ id, error: modelError?.message || 'Boundary detection failed' });
-    }
+    self.postMessage({ id, error: modelError?.message || 'AI boundary detection failed' });
   }
 };

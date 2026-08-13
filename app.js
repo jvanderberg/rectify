@@ -200,59 +200,11 @@ async function autoDetect() {
     points = await RectifyDetector.detect(sourceCanvas);
     drawCrop();
     // The outline is the feedback; keep the editor visually quiet.
-  } catch {
-    try { points = detectQuadrilateral(sourceCanvas); }
-    catch { points = defaultPoints(); }
+  } catch (error) {
+    points = defaultPoints();
     drawCrop();
+    toast('AI edge detection failed — adjust the corners manually.');
   } finally { $('#detecting').classList.add('hidden'); }
-}
-
-// Finds the strongest sustained brightness/color transition along rays from the center.
-// Sampling many rays makes it robust to clutter; corner handles remain the final authority.
-function detectQuadrilateral(canvas) {
-  const maxSide = 520;
-  const scale = Math.min(1, maxSide / Math.max(canvas.width, canvas.height));
-  const w = Math.round(canvas.width * scale), h = Math.round(canvas.height * scale);
-  const work = document.createElement('canvas'); work.width = w; work.height = h;
-  const ctx = work.getContext('2d', { willReadFrequently:true });
-  ctx.drawImage(canvas, 0, 0, w, h);
-  const data = ctx.getImageData(0, 0, w, h).data;
-  const lum = new Float32Array(w*h);
-  for (let i=0,j=0;i<data.length;i+=4,j++) lum[j] = .2126*data[i]+.7152*data[i+1]+.0722*data[i+2];
-  const cx=w/2, cy=h/2, hits=[];
-  for (let a=0;a<Math.PI*2;a+=Math.PI/180) {
-    const dx=Math.cos(a), dy=Math.sin(a);
-    const maxR=Math.min(Math.abs(dx)<.001?1e9:(dx>0?(w-2-cx)/dx:(1-cx)/dx), Math.abs(dy)<.001?1e9:(dy>0?(h-2-cy)/dy:(1-cy)/dy));
-    let bestR=maxR*.82, best=-1;
-    for (let r=maxR*.28;r<maxR*.96;r+=2) {
-      const x=Math.round(cx+dx*r), y=Math.round(cy+dy*r);
-      const gap=5, x0=Math.round(cx+dx*(r-gap)), y0=Math.round(cy+dy*(r-gap));
-      const x1=Math.round(cx+dx*(r+gap)), y1=Math.round(cy+dy*(r+gap));
-      const gradient=Math.abs(lum[y1*w+x1]-lum[y0*w+x0]);
-      const borderBias=1 + .25*(r/maxR);
-      if (gradient*borderBias>best) { best=gradient*borderBias; bestR=r; }
-    }
-    hits.push({x:cx+dx*bestR,y:cy+dy*bestR,a});
-  }
-  // Estimate each edge from ray hits in four directional sectors, using robust medians.
-  const sector = (axis, sign) => hits.filter(p => sign*(axis==='x'?Math.cos(p.a):Math.sin(p.a))>.72);
-  const fitLine = pts => {
-    const mx=pts.reduce((s,p)=>s+p.x,0)/pts.length, my=pts.reduce((s,p)=>s+p.y,0)/pts.length;
-    let xx=0,yy=0,xy=0;
-    pts.forEach(p=>{const dx=p.x-mx,dy=p.y-my;xx+=dx*dx;yy+=dy*dy;xy+=dx*dy;});
-    const angle=.5*Math.atan2(2*xy,xx-yy), a=-Math.sin(angle), b=Math.cos(angle);
-    return {a,b,c:-(a*mx+b*my)};
-  };
-  const top=fitLine(sector('y',-1)), right=fitLine(sector('x',1)), bottom=fitLine(sector('y',1)), left=fitLine(sector('x',-1));
-  const intersect=(a,b)=>{
-    const d=a.a*b.b-b.a*a.b;
-    return {x:(a.b*b.c-b.b*a.c)/d,y:(b.a*a.c-a.a*b.c)/d};
-  };
-  let found=[intersect(top,left),intersect(top,right),intersect(bottom,right),intersect(bottom,left)];
-  if(found.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)||p.x<0||p.y<0||p.x>w||p.y>h)) throw new Error('invalid detection');
-  const area=Math.abs(found.reduce((s,p,i)=>s+p.x*found[(i+1)%4].y-p.y*found[(i+1)%4].x,0)/2);
-  if(area<w*h*.12) throw new Error('too small');
-  return found.map(p=>({x:p.x/scale,y:p.y/scale}));
 }
 
 function rectify() {

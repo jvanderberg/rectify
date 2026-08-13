@@ -1,9 +1,9 @@
-const BUILD='20260813.3';
+const BUILD='20260813.4';
 const CACHE=`rectify-${BUILD}`;
 const versioned=path=>`${path}?v=${BUILD}`;
 const INDEX=versioned('index.html');
 const ASSETS=[
-  INDEX,versioned('styles.css'),versioned('fast-detector.js'),versioned('detector.js'),
+  INDEX,versioned('styles.css'),versioned('detector.js'),
   versioned('detector-worker.js'),versioned('model-detector.js'),versioned('ort.wasm.min.js'),
   versioned('ort-wasm-simd-threaded.mjs'),versioned('ort-wasm-simd-threaded.wasm'),
   versioned('docaligner-lcnet100.onnx'),versioned('app.js'),versioned('manifest.webmanifest'),
