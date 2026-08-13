@@ -4,6 +4,9 @@
   else root.RectifyDetector = api;
 })(typeof self !== 'undefined' ? self : this, function () {
   let openCvPromise;
+  let worker;
+  let workerRequest = 0;
+  const pending = new Map();
 
   function loadOpenCv() {
     if (typeof window === 'undefined') return Promise.reject(new Error('OpenCV loader requires a browser'));
@@ -32,8 +35,9 @@
   }
 
   async function detect(canvas) {
+    if (typeof Worker !== 'undefined') return detectInWorker(canvas);
     const cv = await loadOpenCv();
-    const maxSide = 1000;
+    const maxSide = 700;
     const scale = Math.min(1, maxSide / Math.max(canvas.width, canvas.height));
     const width = Math.max(1, Math.round(canvas.width * scale));
     const height = Math.max(1, Math.round(canvas.height * scale));
@@ -44,6 +48,48 @@
     const rgba = ctx.getImageData(0, 0, width, height).data;
     const quad = detectRgba(rgba, width, height, cv);
     return quad.map(point => ({ x: point.x / scale, y: point.y / scale }));
+  }
+
+  function detectInWorker(canvas) {
+    const maxSide = 700;
+    const scale = Math.min(1, maxSide / Math.max(canvas.width, canvas.height));
+    const width = Math.max(1, Math.round(canvas.width * scale));
+    const height = Math.max(1, Math.round(canvas.height * scale));
+    const work = document.createElement('canvas');
+    work.width = width; work.height = height;
+    const ctx = work.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(canvas, 0, 0, width, height);
+    const image = ctx.getImageData(0, 0, width, height);
+    if (!worker) {
+      worker = new Worker('detector-worker.js');
+      worker.onmessage = event => {
+        const request = pending.get(event.data.id);
+        if (!request) return;
+        pending.delete(event.data.id);
+        clearTimeout(request.timeout);
+        if (event.data.error) request.reject(new Error(event.data.error));
+        else request.resolve(event.data.points.map(point => ({ x: point.x / request.scale, y: point.y / request.scale })));
+      };
+      worker.onerror = () => resetWorker(new Error('Detector worker failed'));
+    }
+    const id = ++workerRequest;
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        pending.delete(id);
+        resetWorker(new Error('Detector timed out'));
+        reject(new Error('Detector timed out'));
+      }, 8000);
+      pending.set(id, { resolve, reject, scale, timeout });
+      worker.postMessage({ id, rgba: image.data.buffer, width, height }, [image.data.buffer]);
+    });
+  }
+
+  function resetWorker(error) {
+    worker?.terminate(); worker = null;
+    for (const request of pending.values()) {
+      clearTimeout(request.timeout); request.reject(error);
+    }
+    pending.clear();
   }
 
   function detectRgba(rgba, width, height, cv) {
@@ -59,26 +105,28 @@
       const edgeMaps = [];
       const edges = keep(new cv.Mat());
       cv.Canny(blurred, edges, 35, 110, 3, true);
-      edgeMaps.push(edges);
+      edgeMaps.push({ mat: edges, closeSizes: [5, 11] });
 
       // Printed-photo borders are often low contrast or locally shadowed. Adaptive
       // thresholding adds region boundaries that Canny alone can miss.
       const adaptive = keep(new cv.Mat());
       cv.adaptiveThreshold(blurred, adaptive, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 31, 7);
-      edgeMaps.push(adaptive);
+      edgeMaps.push({ mat: adaptive, closeSizes: [5, 11] });
 
       const otsu = keep(new cv.Mat());
       cv.threshold(blurred, otsu, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU);
-      edgeMaps.push(otsu);
+      edgeMaps.push({ mat: otsu, closeSizes: [7] });
 
       const candidates = [];
-      for (const base of edgeMaps) {
-        for (const closeSize of [3, 7, 13]) {
-          const processed = keep(new cv.Mat());
-          const kernel = keep(cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(closeSize, closeSize)));
-          cv.morphologyEx(base, processed, cv.MORPH_CLOSE, kernel);
-          if (base === edges) cv.dilate(processed, processed, kernel, new cv.Point(-1, -1), 1);
-          collectCandidates(processed, edges, width, height, cv, candidates, keep);
+      for (const { mat: base, closeSizes } of edgeMaps) {
+        for (const closeSize of closeSizes) {
+          const processed = new cv.Mat();
+          const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(closeSize, closeSize));
+          try {
+            cv.morphologyEx(base, processed, cv.MORPH_CLOSE, kernel);
+            if (base === edges) cv.dilate(processed, processed, kernel, new cv.Point(-1, -1), 1);
+            collectCandidates(processed, edges, width, height, cv, candidates);
+          } finally { processed.delete(); kernel.delete(); }
         }
       }
 
@@ -92,33 +140,39 @@
     }
   }
 
-  function collectCandidates(binary, edgeReference, width, height, cv, candidates, keep) {
-    const contours = keep(new cv.MatVector());
-    const hierarchy = keep(new cv.Mat());
-    cv.findContours(binary, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+  function collectCandidates(binary, edgeReference, width, height, cv, candidates) {
+    const contours = new cv.MatVector();
+    const hierarchy = new cv.Mat();
     const imageArea = width * height;
     const minArea = imageArea * 0.06;
-
-    for (let i = 0; i < contours.size(); i++) {
-      const contour = contours.get(i);
+    try {
+      cv.findContours(binary, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+      const plausible = [];
+      for (let i = 0; i < contours.size(); i++) {
+        const contour = contours.get(i);
+        const area = Math.abs(cv.contourArea(contour));
+        if (area >= minArea && area <= imageArea * 0.995) plausible.push({ contour, area });
+        else contour.delete();
+      }
+      plausible.sort((a, b) => b.area - a.area);
       try {
-        const contourArea = Math.abs(cv.contourArea(contour));
-        if (contourArea < minArea || contourArea > imageArea * 0.995) continue;
-        const perimeter = cv.arcLength(contour, true);
-        for (const epsilon of [0.012, 0.018, 0.025, 0.035, 0.05]) {
-          const approx = new cv.Mat();
-          try {
-            cv.approxPolyDP(contour, approx, perimeter * epsilon, true);
-            if (approx.rows !== 4 || !cv.isContourConvex(approx)) continue;
-            const raw = [];
-            for (let p = 0; p < 4; p++) raw.push({ x: approx.data32S[p * 2], y: approx.data32S[p * 2 + 1] });
-            const points = orderPoints(raw);
-            const score = scoreQuad(points, contourArea, edgeReference, width, height);
-            if (Number.isFinite(score)) candidates.push({ points, score });
-          } finally { approx.delete(); }
+        for (const { contour, area: contourArea } of plausible.slice(0, 80)) {
+          const perimeter = cv.arcLength(contour, true);
+          for (const epsilon of [0.012, 0.018, 0.025, 0.035, 0.05]) {
+            const approx = new cv.Mat();
+            try {
+              cv.approxPolyDP(contour, approx, perimeter * epsilon, true);
+              if (approx.rows !== 4 || !cv.isContourConvex(approx)) continue;
+              const raw = [];
+              for (let p = 0; p < 4; p++) raw.push({ x: approx.data32S[p * 2], y: approx.data32S[p * 2 + 1] });
+              const points = orderPoints(raw);
+              const score = scoreQuad(points, contourArea, edgeReference, width, height);
+              if (Number.isFinite(score)) candidates.push({ points, score });
+            } finally { approx.delete(); }
+          }
         }
-      } finally { contour.delete(); }
-    }
+      } finally { for (const { contour } of plausible) contour.delete(); }
+    } finally { contours.delete(); hierarchy.delete(); }
   }
 
   function scoreQuad(points, contourArea, edges, width, height) {
