@@ -197,11 +197,13 @@ async function autoDetect() {
   $('#detecting').classList.remove('hidden');
   await new Promise(resolve => setTimeout(resolve, 35));
   try {
-    points = detectQuadrilateral(sourceCanvas);
+    points = await RectifyDetector.detect(sourceCanvas);
     drawCrop();
     // The outline is the feedback; keep the editor visually quiet.
   } catch {
-    points = defaultPoints(); drawCrop();
+    try { points = detectQuadrilateral(sourceCanvas); }
+    catch { points = defaultPoints(); }
+    drawCrop();
   } finally { $('#detecting').classList.add('hidden'); }
 }
 

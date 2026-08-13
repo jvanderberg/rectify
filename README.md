@@ -2,6 +2,8 @@
 
 An installable, offline-capable photo straightener. It detects the edges of a photographed print, lets the user refine all four corners, and performs perspective correction entirely in the browser.
 
+Boundary detection uses the official OpenCV.js 4.13 WebAssembly build (`opencv.js`, SHA-256 `63366510248adf3a7eddf3e793dd825404efb7df3749f4d6f8557c7fa4ca8aa0`) with a multi-pass Canny/threshold, morphology, contour, polygon-approximation, and quadrilateral-scoring pipeline. The WASM bundle loads on demand and is cached after its first use.
+
 ## Run locally
 
 ```sh
