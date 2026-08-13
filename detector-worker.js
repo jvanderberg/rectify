@@ -1,4 +1,4 @@
-importScripts('detector.js', 'opencv.js');
+importScripts('fast-detector.js', 'detector.js');
 
 async function openCvReady() {
   if (self.cv instanceof Promise) self.cv = await self.cv;
@@ -13,9 +13,15 @@ async function openCvReady() {
 self.onmessage = async event => {
   const { id, rgba, width, height } = event.data;
   try {
+    const pixels = new Uint8ClampedArray(rgba);
+    try {
+      const result = RectifyFastDetector.detectRgba(pixels, width, height);
+      if (result.confidence >= .7) return self.postMessage({ id, points: result.points, detector: 'lines' });
+    } catch {}
+    importScripts('opencv.js');
     const cv = await openCvReady();
-    const points = RectifyDetector.detectRgba(new Uint8ClampedArray(rgba), width, height, cv);
-    self.postMessage({ id, points });
+    const points = RectifyDetector.detectRgba(pixels, width, height, cv);
+    self.postMessage({ id, points, detector: 'opencv' });
   } catch (error) {
     self.postMessage({ id, error: error?.message || 'Boundary detection failed' });
   }

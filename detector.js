@@ -37,7 +37,7 @@
   async function detect(canvas) {
     if (typeof Worker !== 'undefined') return detectInWorker(canvas);
     const cv = await loadOpenCv();
-    const maxSide = 700;
+    const maxSide = 560;
     const scale = Math.min(1, maxSide / Math.max(canvas.width, canvas.height));
     const width = Math.max(1, Math.round(canvas.width * scale));
     const height = Math.max(1, Math.round(canvas.height * scale));
@@ -51,7 +51,7 @@
   }
 
   function detectInWorker(canvas) {
-    const maxSide = 700;
+    const maxSide = 560;
     const scale = Math.min(1, maxSide / Math.max(canvas.width, canvas.height));
     const width = Math.max(1, Math.round(canvas.width * scale));
     const height = Math.max(1, Math.round(canvas.height * scale));
@@ -78,7 +78,7 @@
         pending.delete(id);
         resetWorker(new Error('Detector timed out'));
         reject(new Error('Detector timed out'));
-      }, 8000);
+      }, 2500);
       pending.set(id, { resolve, reject, scale, timeout });
       worker.postMessage({ id, rgba: image.data.buffer, width, height }, [image.data.buffer]);
     });

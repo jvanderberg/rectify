@@ -1,5 +1,5 @@
-const CACHE='rectify-v5';
-const ASSETS=['./','index.html','styles.css','detector.js','detector-worker.js','app.js','manifest.webmanifest','icon.svg','icon-192.png','icon-512.png'];
+const CACHE='rectify-v6';
+const ASSETS=['./','index.html','styles.css','fast-detector.js','detector.js','detector-worker.js','app.js','manifest.webmanifest','icon.svg','icon-192.png','icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil((async()=>{
   const oldOpenCv=await caches.match('opencv.js');
