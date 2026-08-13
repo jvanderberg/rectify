@@ -1,0 +1,242 @@
+const $ = (selector) => document.querySelector(selector);
+const views = [$('#startView'), $('#editView'), $('#resultView')];
+const sourceCanvas = $('#sourceCanvas');
+const sourceCtx = sourceCanvas.getContext('2d', { willReadFrequently: true });
+const resultCanvas = $('#resultCanvas');
+const resultCtx = resultCanvas.getContext('2d');
+const overlay = $('#cropOverlay');
+const polygon = $('#cropPolygon');
+const handles = $('#handles');
+let sourceImage = null;
+let points = [];
+let dragging = -1;
+let rotation = 0;
+let toastTimer;
+
+function showView(view) {
+  views.forEach(v => v.classList.toggle('hidden', v !== view));
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function toast(message) {
+  const el = $('#toast');
+  el.textContent = message;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2300);
+}
+
+$('#cameraButton').addEventListener('click', () => $('#cameraInput').click());
+$('#libraryButton').addEventListener('click', () => $('#libraryInput').click());
+$('#cameraInput').addEventListener('change', loadSelection);
+$('#libraryInput').addEventListener('change', loadSelection);
+$('#backButton').addEventListener('click', reset);
+$('#againButton').addEventListener('click', reset);
+$('#autoButton').addEventListener('click', autoDetect);
+$('#straightenButton').addEventListener('click', rectify);
+$('#rotateButton').addEventListener('click', () => { rotation = (rotation + 90) % 360; renderSource(); });
+$('#saveButton').addEventListener('click', saveResult);
+$('#infoButton').addEventListener('click', () => $('#infoDialog').showModal());
+$('#closeInfo').addEventListener('click', () => $('#infoDialog').close());
+$('#infoDialog').addEventListener('click', e => { if (e.target === $('#infoDialog')) $('#infoDialog').close(); });
+
+async function loadSelection(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) return toast('Please choose an image file.');
+  try {
+    sourceImage = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  } catch {
+    sourceImage = await loadImageFallback(file);
+  }
+  rotation = 0;
+  showView($('#editView'));
+  renderSource();
+  setTimeout(autoDetect, 120);
+  event.target.value = '';
+}
+
+function loadImageFallback(file) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => { URL.revokeObjectURL(image.src); resolve(image); };
+    image.onerror = reject;
+    image.src = URL.createObjectURL(file);
+  });
+}
+
+function renderSource() {
+  if (!sourceImage) return;
+  const rotated = rotation % 180 !== 0;
+  const nativeWidth = sourceImage.width || sourceImage.naturalWidth;
+  const nativeHeight = sourceImage.height || sourceImage.naturalHeight;
+  const maxDimension = 2200;
+  const targetW = rotated ? nativeHeight : nativeWidth;
+  const targetH = rotated ? nativeWidth : nativeHeight;
+  const scale = Math.min(1, maxDimension / Math.max(targetW, targetH));
+  sourceCanvas.width = Math.round(targetW * scale);
+  sourceCanvas.height = Math.round(targetH * scale);
+  const stage = $('#editorStage');
+  stage.style.aspectRatio = `${sourceCanvas.width} / ${sourceCanvas.height}`;
+  stage.style.maxWidth = `calc(62vh * ${sourceCanvas.width / sourceCanvas.height})`;
+  sourceCtx.save();
+  sourceCtx.translate(sourceCanvas.width / 2, sourceCanvas.height / 2);
+  sourceCtx.rotate(rotation * Math.PI / 180);
+  sourceCtx.drawImage(sourceImage, -nativeWidth * scale / 2, -nativeHeight * scale / 2, nativeWidth * scale, nativeHeight * scale);
+  sourceCtx.restore();
+  requestAnimationFrame(() => {
+    overlay.setAttribute('viewBox', `0 0 ${sourceCanvas.width} ${sourceCanvas.height}`);
+    points = defaultPoints();
+    drawCrop();
+  });
+}
+
+function defaultPoints() {
+  const { width:w, height:h } = sourceCanvas;
+  return [{x:w*.08,y:h*.08},{x:w*.92,y:h*.08},{x:w*.92,y:h*.92},{x:w*.08,y:h*.92}];
+}
+
+function drawCrop() {
+  polygon.setAttribute('points', points.map(p => `${p.x},${p.y}`).join(' '));
+  handles.replaceChildren(...points.map((p, i) => {
+    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    group.classList.add('crop-handle'); group.dataset.index = i;
+    group.setAttribute('transform', `translate(${p.x} ${p.y})`);
+    const outer = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    outer.setAttribute('r', '18'); outer.classList.add('outer');
+    const inner = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    inner.setAttribute('r', '5'); inner.classList.add('inner');
+    group.append(outer, inner); return group;
+  }));
+}
+
+overlay.addEventListener('pointerdown', event => {
+  const handle = event.target.closest('.crop-handle');
+  if (!handle) return;
+  dragging = Number(handle.dataset.index);
+  overlay.setPointerCapture(event.pointerId);
+  updateDrag(event);
+});
+overlay.addEventListener('pointermove', event => { if (dragging >= 0) updateDrag(event); });
+overlay.addEventListener('pointerup', event => { dragging = -1; overlay.releasePointerCapture(event.pointerId); });
+overlay.addEventListener('pointercancel', () => { dragging = -1; });
+
+function updateDrag(event) {
+  const rect = overlay.getBoundingClientRect();
+  points[dragging] = {
+    x: clamp((event.clientX - rect.left) * sourceCanvas.width / rect.width, 0, sourceCanvas.width),
+    y: clamp((event.clientY - rect.top) * sourceCanvas.height / rect.height, 0, sourceCanvas.height)
+  };
+  drawCrop();
+}
+
+async function autoDetect() {
+  if (!sourceImage) return;
+  $('#detecting').classList.remove('hidden');
+  await new Promise(resolve => setTimeout(resolve, 35));
+  try {
+    points = detectQuadrilateral(sourceCanvas);
+    drawCrop();
+    toast('Edges found — adjust if needed.');
+  } catch {
+    points = defaultPoints(); drawCrop(); toast('Drag the dots to the photo corners.');
+  } finally { $('#detecting').classList.add('hidden'); }
+}
+
+// Finds the strongest sustained brightness/color transition along rays from the center.
+// Sampling many rays makes it robust to clutter; corner handles remain the final authority.
+function detectQuadrilateral(canvas) {
+  const maxSide = 520;
+  const scale = Math.min(1, maxSide / Math.max(canvas.width, canvas.height));
+  const w = Math.round(canvas.width * scale), h = Math.round(canvas.height * scale);
+  const work = document.createElement('canvas'); work.width = w; work.height = h;
+  const ctx = work.getContext('2d', { willReadFrequently:true });
+  ctx.drawImage(canvas, 0, 0, w, h);
+  const data = ctx.getImageData(0, 0, w, h).data;
+  const lum = new Float32Array(w*h);
+  for (let i=0,j=0;i<data.length;i+=4,j++) lum[j] = .2126*data[i]+.7152*data[i+1]+.0722*data[i+2];
+  const cx=w/2, cy=h/2, hits=[];
+  for (let a=0;a<Math.PI*2;a+=Math.PI/180) {
+    const dx=Math.cos(a), dy=Math.sin(a);
+    const maxR=Math.min(Math.abs(dx)<.001?1e9:(dx>0?(w-2-cx)/dx:(1-cx)/dx), Math.abs(dy)<.001?1e9:(dy>0?(h-2-cy)/dy:(1-cy)/dy));
+    let bestR=maxR*.82, best=-1;
+    for (let r=maxR*.28;r<maxR*.96;r+=2) {
+      const x=Math.round(cx+dx*r), y=Math.round(cy+dy*r);
+      const gap=5, x0=Math.round(cx+dx*(r-gap)), y0=Math.round(cy+dy*(r-gap));
+      const x1=Math.round(cx+dx*(r+gap)), y1=Math.round(cy+dy*(r+gap));
+      const gradient=Math.abs(lum[y1*w+x1]-lum[y0*w+x0]);
+      const borderBias=1 + .25*(r/maxR);
+      if (gradient*borderBias>best) { best=gradient*borderBias; bestR=r; }
+    }
+    hits.push({x:cx+dx*bestR,y:cy+dy*bestR,a});
+  }
+  // Estimate each edge from ray hits in four directional sectors, using robust medians.
+  const sector = (axis, sign) => hits.filter(p => sign*(axis==='x'?Math.cos(p.a):Math.sin(p.a))>.72);
+  const fitLine = pts => {
+    const mx=pts.reduce((s,p)=>s+p.x,0)/pts.length, my=pts.reduce((s,p)=>s+p.y,0)/pts.length;
+    let xx=0,yy=0,xy=0;
+    pts.forEach(p=>{const dx=p.x-mx,dy=p.y-my;xx+=dx*dx;yy+=dy*dy;xy+=dx*dy;});
+    const angle=.5*Math.atan2(2*xy,xx-yy), a=-Math.sin(angle), b=Math.cos(angle);
+    return {a,b,c:-(a*mx+b*my)};
+  };
+  const top=fitLine(sector('y',-1)), right=fitLine(sector('x',1)), bottom=fitLine(sector('y',1)), left=fitLine(sector('x',-1));
+  const intersect=(a,b)=>{
+    const d=a.a*b.b-b.a*a.b;
+    return {x:(a.b*b.c-b.b*a.c)/d,y:(b.a*a.c-a.a*b.c)/d};
+  };
+  let found=[intersect(top,left),intersect(top,right),intersect(bottom,right),intersect(bottom,left)];
+  if(found.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)||p.x<0||p.y<0||p.x>w||p.y>h)) throw new Error('invalid detection');
+  const area=Math.abs(found.reduce((s,p,i)=>s+p.x*found[(i+1)%4].y-p.y*found[(i+1)%4].x,0)/2);
+  if(area<w*h*.12) throw new Error('too small');
+  return found.map(p=>({x:p.x/scale,y:p.y/scale}));
+}
+
+function rectify() {
+  if (!isValidQuad(points)) return toast('Corners cross over — please separate them.');
+  const [tl,tr,br,bl]=points;
+  const width=Math.round(Math.max(distance(tl,tr),distance(bl,br)));
+  const height=Math.round(Math.max(distance(tl,bl),distance(tr,br)));
+  if(width<30||height<30) return toast('That crop is too small.');
+  const maxOutput=3600, scale=Math.min(1,maxOutput/Math.max(width,height));
+  resultCanvas.width=Math.max(1,Math.round(width*scale)); resultCanvas.height=Math.max(1,Math.round(height*scale));
+  const src=sourceCtx.getImageData(0,0,sourceCanvas.width,sourceCanvas.height);
+  const out=resultCtx.createImageData(resultCanvas.width,resultCanvas.height);
+  // Projective map from output rectangle back into the four source corners.
+  const H=homography([
+    [0,0],[resultCanvas.width-1,0],[resultCanvas.width-1,resultCanvas.height-1],[0,resultCanvas.height-1]
+  ], points.map(p=>[p.x,p.y]));
+  for(let y=0;y<resultCanvas.height;y++) for(let x=0;x<resultCanvas.width;x++) {
+    const d=H[6]*x+H[7]*y+1, sx=(H[0]*x+H[1]*y+H[2])/d, sy=(H[3]*x+H[4]*y+H[5])/d;
+    bilinear(src,out,x,y,sx,sy);
+  }
+  resultCtx.putImageData(out,0,0);
+  showView($('#resultView'));
+}
+
+function homography(from,to) {
+  const A=[],b=[];
+  for(let i=0;i<4;i++) { const [x,y]=from[i],[u,v]=to[i]; A.push([x,y,1,0,0,0,-u*x,-u*y]);b.push(u); A.push([0,0,0,x,y,1,-v*x,-v*y]);b.push(v); }
+  for(let i=0;i<8;i++) { let pivot=i; for(let j=i+1;j<8;j++) if(Math.abs(A[j][i])>Math.abs(A[pivot][i])) pivot=j; [A[i],A[pivot]]=[A[pivot],A[i]]; [b[i],b[pivot]]=[b[pivot],b[i]]; const div=A[i][i]; for(let k=i;k<8;k++) A[i][k]/=div; b[i]/=div; for(let j=0;j<8;j++) if(j!==i) { const f=A[j][i]; for(let k=i;k<8;k++) A[j][k]-=f*A[i][k]; b[j]-=f*b[i]; } }
+  return b;
+}
+
+function bilinear(src,out,ox,oy,x,y) {
+  const x0=clamp(Math.floor(x),0,src.width-1), y0=clamp(Math.floor(y),0,src.height-1), x1=Math.min(x0+1,src.width-1), y1=Math.min(y0+1,src.height-1), fx=x-x0, fy=y-y0;
+  const di=(oy*out.width+ox)*4;
+  for(let c=0;c<4;c++) { const a=src.data[(y0*src.width+x0)*4+c]*(1-fx)+src.data[(y0*src.width+x1)*4+c]*fx; const d=src.data[(y1*src.width+x0)*4+c]*(1-fx)+src.data[(y1*src.width+x1)*4+c]*fx; out.data[di+c]=a*(1-fy)+d*fy; }
+}
+
+function saveResult() {
+  resultCanvas.toBlob(async blob => {
+    const file=new File([blob],`rectified-${new Date().toISOString().slice(0,10)}.jpg`,{type:'image/jpeg'});
+    if(navigator.canShare?.({files:[file]})) { try { await navigator.share({files:[file],title:'Rectified photo'}); return; } catch(e) { if(e.name==='AbortError') return; } }
+    const url=URL.createObjectURL(blob), link=document.createElement('a'); link.href=url; link.download=file.name; link.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); toast('Photo saved.');
+  },'image/jpeg',.94);
+}
+
+function reset() { sourceImage=null; points=[]; showView($('#startView')); }
+function distance(a,b) { return Math.hypot(a.x-b.x,a.y-b.y); }
+function clamp(n,min,max) { return Math.max(min,Math.min(max,n)); }
+function isValidQuad(p) { const signs=p.map((a,i)=>{const b=p[(i+1)%4],c=p[(i+2)%4];return Math.sign((b.x-a.x)*(c.y-b.y)-(b.y-a.y)*(c.x-b.x));}); return signs.every(s=>s===signs[0]&&s!==0); }
+
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f4f1e8" />
+    <meta name="description" content="Straighten printed photos with private, on-device perspective correction." />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+    <link rel="stylesheet" href="styles.css" />
+    <title>Rectify — Photo Straightener</title>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="Rectify home">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>RECTIFY</span>
+      </a>
+      <button class="icon-button" id="infoButton" aria-label="About Rectify">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 10.5v6M12 7.5h.01"/></svg>
+      </button>
+    </header>
+
+    <main>
+      <section id="startView" class="view start-view">
+        <div class="intro-copy">
+          <p class="eyebrow">PHOTO STRAIGHTENER</p>
+          <h1>Old photos.<br><em>Squared up.</em></h1>
+          <p class="lede">Photograph any print. Rectify finds its edges and removes the perspective—right on your device.</p>
+        </div>
+
+        <div class="demo-wrap" aria-hidden="true">
+          <div class="demo-card">
+            <svg class="demo-photo" viewBox="0 0 320 230" role="img">
+              <defs>
+                <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#adc7bf"/><stop offset="1" stop-color="#e8d8b8"/></linearGradient>
+              </defs>
+              <rect width="320" height="230" fill="url(#sky)"/>
+              <circle cx="245" cy="55" r="25" fill="#f6d57a" opacity=".9"/>
+              <path d="M0 145 70 80l62 70 54-45 62 54 72-48v119H0z" fill="#355e58" opacity=".72"/>
+              <path d="M0 174 82 116l43 48 65-32 53 39 77-30v89H0z" fill="#163b38"/>
+              <path d="M165 230c10-55 27-78 50-100 7 22 8 57 1 100z" fill="#d6b672" opacity=".75"/>
+            </svg>
+            <span class="corner tl"></span><span class="corner tr"></span><span class="corner br"></span><span class="corner bl"></span>
+          </div>
+          <svg class="scribble" viewBox="0 0 120 55"><path d="M4 15c36-10 73-7 104 7M92 12l17 10-16 12"/></svg>
+          <div class="straight-card"><div class="mini-landscape"></div></div>
+        </div>
+
+        <div class="start-actions">
+          <button id="cameraButton" class="primary-button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h3l1.5-2h7l1.5 2h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+            Take a photo
+          </button>
+          <button id="libraryButton" class="text-button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="1"/><path d="m6 16 4-4 3 3 2-2 3 3M15.5 9h.01"/></svg>
+            Choose from library
+          </button>
+          <p class="privacy-note"><svg viewBox="0 0 24 24"><path d="M7 10V8a5 5 0 0 1 10 0v2M6 10h12v10H6z"/></svg> Your photos never leave this device.</p>
+        </div>
+      </section>
+
+      <section id="editView" class="view edit-view hidden" aria-labelledby="editTitle">
+        <div class="step-heading">
+          <button id="backButton" class="icon-button" aria-label="Start over"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button>
+          <div><p class="eyebrow">STEP 1 OF 2</p><h2 id="editTitle">Line up the corners</h2></div>
+          <button id="rotateButton" class="icon-button" aria-label="Rotate image"><svg viewBox="0 0 24 24"><path d="M4 8V4m0 0h4M4 4l3 3a7 7 0 1 1-1 8"/></svg></button>
+        </div>
+        <p class="instruction">Drag each dot to a corner of the printed photo.</p>
+        <div id="editorStage" class="editor-stage">
+          <canvas id="sourceCanvas"></canvas>
+          <svg id="cropOverlay" class="crop-overlay" aria-label="Adjustable crop boundary">
+            <polygon id="cropPolygon"></polygon>
+            <g id="handles"></g>
+          </svg>
+          <div id="detecting" class="detecting hidden"><span class="spinner"></span> Finding edges…</div>
+        </div>
+        <div class="edit-footer">
+          <button id="autoButton" class="secondary-button"><svg viewBox="0 0 24 24"><path d="m12 3 1.4 4.2L18 8.5l-4.6 1.3L12 14l-1.4-4.2L6 8.5l4.6-1.3zM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></svg> Auto-detect</button>
+          <button id="straightenButton" class="primary-button">Straighten photo <svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg></button>
+        </div>
+      </section>
+
+      <section id="resultView" class="view result-view hidden" aria-labelledby="resultTitle">
+        <div class="result-copy"><p class="eyebrow">ALL SQUARED UP</p><h2 id="resultTitle">Looking sharp.</h2><p>Perspective corrected and ready to keep.</p></div>
+        <div class="result-frame"><canvas id="resultCanvas"></canvas></div>
+        <div class="result-actions">
+          <button id="saveButton" class="primary-button"><svg viewBox="0 0 24 24"><path d="M12 4v11m0 0 4-4m-4 4-4-4M5 19h14"/></svg> Save photo</button>
+          <button id="againButton" class="text-button"><svg viewBox="0 0 24 24"><path d="M4 7v4h4M20 17v-4h-4M6.5 16.5A7 7 0 0 0 18 14M17.5 7.5A7 7 0 0 0 6 10"/></svg> Straighten another</button>
+        </div>
+      </section>
+    </main>
+
+    <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden />
+    <input id="libraryInput" type="file" accept="image/*" hidden />
+
+    <dialog id="infoDialog">
+      <button id="closeInfo" class="dialog-close icon-button" aria-label="Close"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      <p class="eyebrow">ABOUT</p><h2>Made for the shoebox.</h2>
+      <p>Rectify turns quick snapshots of printed photos into clean, rectangular digital copies. Everything happens locally in your browser.</p>
+      <p class="tip"><strong>For best results</strong><br>Use even light, avoid glare, and include a little background around every edge.</p>
+    </dialog>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="app.js" defer></script>
+  </body>
+</html>
