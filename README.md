@@ -1,5 +1,7 @@
 # Rectify
 
+**[Open the Rectify PWA](https://jvanderberg.github.io/rectify/)**
+
 An installable, offline-capable photo straightener. It detects the edges of a photographed print, lets the user refine all four corners, and performs perspective correction entirely in the browser.
 
 Boundary detection runs DocAligner's full-precision FastViT-SA24 corner-heatmap model locally in a Web Worker using ONNX Runtime Web. The 79 MB model replaces the much less capable LCNet100 checkpoint. Its initial four-corner estimate is refined against the image's full line gradients before the perspective correction is rendered. There is no automatic backup detector: a model failure is reported explicitly and the editor opens with manual corners.
