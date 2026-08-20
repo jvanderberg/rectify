@@ -1,4 +1,4 @@
-const BUILD='20260813.4';
+const BUILD='20260819.1';
 const CACHE=`rectify-${BUILD}`;
 const versioned=path=>`${path}?v=${BUILD}`;
 const INDEX=versioned('index.html');
@@ -6,7 +6,7 @@ const ASSETS=[
   INDEX,versioned('styles.css'),versioned('detector.js'),
   versioned('detector-worker.js'),versioned('model-detector.js'),versioned('ort.wasm.min.js'),
   versioned('ort-wasm-simd-threaded.mjs'),versioned('ort-wasm-simd-threaded.wasm'),
-  versioned('docaligner-lcnet100.onnx'),versioned('app.js'),versioned('manifest.webmanifest'),
+  versioned('app.js'),versioned('manifest.webmanifest'),
   versioned('icon.svg'),versioned('icon-192.png'),versioned('icon-512.png'),versioned('version.json')
 ];
 
@@ -32,6 +32,12 @@ self.addEventListener('fetch',event=>{
   const url=new URL(event.request.url);
   if(url.pathname.endsWith('/version.json')){
     event.respondWith(fetch(new Request(event.request,{cache:'no-store'})));
+    return;
+  }
+  // The detector worker owns versioned model caching so it can stream real
+  // download progress instead of waiting for cache.put() to consume the body.
+  if(url.pathname.endsWith('.onnx')){
+    event.respondWith(fetch(new Request(event.request,{cache:'reload'})));
     return;
   }
   if(event.request.mode==='navigate'){

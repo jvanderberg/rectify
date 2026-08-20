@@ -33,6 +33,9 @@ h1 em { color:var(--coral); font-weight:400; }
 .text-button:hover { color:var(--coral-dark); }
 .privacy-note { display:flex; align-items:center; gap:7px; color:#89918c; font-size:.75rem; }
 .privacy-note svg { width:15px; height:15px; }
+.model-status { margin:0; color:var(--coral-dark); font-size:.75rem; font-weight:600; }
+.model-status.ready { color:#527069; }
+.model-status.failed { color:#a54235; }
 .demo-wrap { grid-area:demo; position:relative; display:flex; min-height:430px; align-items:center; justify-content:center; }
 .demo-card { position:absolute; left:3%; top:8%; width:74%; padding:10px 10px 32px; background:#e9e1d2; box-shadow:var(--shadow); transform:rotate(-7deg) skewX(-2deg); }
 .demo-photo { width:100%; height:auto; display:block; filter:saturate(.8) contrast(.95); }
@@ -89,6 +92,7 @@ dialog p { color:var(--muted); line-height:1.6; }
   .start-actions .primary-button { width:100%; }
   .start-actions .text-button { align-self:center; }
   .start-actions .privacy-note { margin:2px 0 0; justify-content:center; }
+  .start-actions .model-status { text-align:center; }
   .demo-wrap { order:3; min-height:290px; width:min(100%,420px); margin:auto; }
   h1 { font-size:clamp(2.9rem,14vw,4.5rem); }
   .lede { margin-top:16px; line-height:1.48; }

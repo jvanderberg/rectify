@@ -1,23 +1,67 @@
 const build = new URL(self.location.href).searchParams.get('v') || 'dev';
 self.RECTIFY_BUILD = build;
+const assetUrl = name => new URL(`${name}?v=${encodeURIComponent(build)}`, self.location.href).href;
 importScripts(
-  `ort.wasm.min.js?v=${encodeURIComponent(build)}`,
-  `model-detector.js?v=${encodeURIComponent(build)}`
+  assetUrl('ort.wasm.min.js'),
+  assetUrl('model-detector.js')
 );
 
 ort.env.wasm.numThreads = 1;
 ort.env.wasm.proxy = false;
 ort.env.wasm.wasmPaths = {
-  mjs: `ort-wasm-simd-threaded.mjs?v=${encodeURIComponent(build)}`,
-  wasm: `ort-wasm-simd-threaded.wasm?v=${encodeURIComponent(build)}`
+  mjs: assetUrl('ort-wasm-simd-threaded.mjs'),
+  wasm: assetUrl('ort-wasm-simd-threaded.wasm')
 };
 
 let sessionPromise;
+let lastReportedPercent = -1;
+function reportProgress(loaded, total, phase = 'download') {
+  const percent = total ? Math.round(loaded / total * 100) : -1;
+  if (phase === 'download' && percent === lastReportedPercent) return;
+  if (phase === 'download') lastReportedPercent = percent;
+  self.postMessage({ progress: true, loaded, total, phase });
+}
+
+async function modelBytes() {
+  const url = assetUrl('docaligner-fastvit-sa24.onnx');
+  const request = new Request(url);
+  const cache = await caches.open(`rectify-${build}`);
+  let response = await cache.match(request);
+  const cached = Boolean(response);
+  if (!response) response = await fetch(new Request(request, { cache: 'reload' }));
+  if (!response.ok) throw new Error(`Model download failed (${response.status})`);
+  const total = Number(response.headers.get('content-length')) || 83084930;
+  const reader = response.body?.getReader();
+  if (!reader) {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (!cached) await cache.put(request, new Response(bytes, { headers: response.headers }));
+    reportProgress(bytes.byteLength, total);
+    return bytes;
+  }
+
+  const chunks = [];
+  let loaded = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value); loaded += value.byteLength;
+    reportProgress(loaded, total);
+  }
+  const bytes = new Uint8Array(loaded);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  if (!cached) await cache.put(request, new Response(bytes, { headers: response.headers }));
+  return bytes;
+}
+
 function modelSession() {
   if (!sessionPromise) {
-    sessionPromise = ort.InferenceSession.create(`docaligner-lcnet100.onnx?v=${encodeURIComponent(build)}`, {
-      executionProviders: ['wasm'],
-      graphOptimizationLevel: 'all'
+    sessionPromise = modelBytes().then(bytes => {
+      reportProgress(1, 1, 'initializing');
+      return ort.InferenceSession.create(bytes, {
+        executionProviders: ['wasm'],
+        graphOptimizationLevel: 'all'
+      });
     });
   }
   return sessionPromise;

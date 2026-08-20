@@ -22,4 +22,7 @@ assert.deepEqual(points, [
 assert.equal(detector.isPlausibleQuad(points, 80, 80), true);
 assert.equal(detector.isPlausibleQuad([points[0], points[0], points[2], points[3]], 80, 80), false);
 
+const weakHeatmap = { dims: [1, 4, 8, 8], data: new Float32Array(4 * 8 * 8).fill(.1) };
+assert.throws(() => detector.pointsFromHeatmap(weakHeatmap, 80, 80), /confidence is too low/);
+
 console.log('Model preprocessing, heatmap decoding, and quality guard passed.');

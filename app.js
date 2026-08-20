@@ -197,7 +197,7 @@ async function autoDetect() {
   $('#detecting').classList.remove('hidden');
   await new Promise(resolve => setTimeout(resolve, 35));
   try {
-    points = await RectifyDetector.detect(sourceCanvas);
+    points = await RectifyDetector.detect(sourceCanvas, updateModelProgress);
     drawCrop();
     // The outline is the feedback; keep the editor visually quiet.
   } catch (error) {
@@ -257,7 +257,26 @@ function isValidQuad(p) { const signs=p.map((a,i)=>{const b=p[(i+1)%4],c=p[(i+2)
 
 const BUILD = window.RECTIFY_BUILD || 'dev';
 
-const warmDetector = () => RectifyDetector?.warmup?.();
+function updateModelProgress({ loaded, total, phase }) {
+  const percent = total ? Math.min(100, Math.round(loaded / total * 100)) : null;
+  const message = phase === 'initializing' ? 'Starting AI…' : `Loading AI${percent === null ? '…' : `… ${percent}%`}`;
+  const detecting = $('#detecting');
+  const status = $('#modelStatus');
+  if (!detecting.classList.contains('hidden')) $('#detectStatus').textContent = message;
+  status.textContent = message;
+  status.classList.remove('ready', 'failed');
+}
+
+const warmDetector = async () => {
+  try {
+    await RectifyDetector?.warmup?.(updateModelProgress);
+    $('#modelStatus').textContent = 'AI ready';
+    $('#modelStatus').classList.add('ready');
+  } catch {
+    $('#modelStatus').textContent = 'AI unavailable — retry after choosing a photo';
+    $('#modelStatus').classList.add('failed');
+  }
+};
 if ('requestIdleCallback' in window) requestIdleCallback(warmDetector, { timeout: 1500 });
 else setTimeout(warmDetector, 250);
 

@@ -9,15 +9,23 @@
     const plane = INPUT_SIZE * INPUT_SIZE;
     const data = new Float32Array(plane * 3);
     for (let y = 0; y < INPUT_SIZE; y++) {
-      const sy = Math.min(height - 1, Math.round((y + .5) * height / INPUT_SIZE - .5));
+      const sourceY = Math.max(0, Math.min(height - 1, (y + .5) * height / INPUT_SIZE - .5));
+      const y0 = Math.floor(sourceY), y1 = Math.min(height - 1, y0 + 1), fy = sourceY - y0;
       for (let x = 0; x < INPUT_SIZE; x++) {
-        const sx = Math.min(width - 1, Math.round((x + .5) * width / INPUT_SIZE - .5));
-        const source = (sy * width + sx) * 4;
+        const sourceX = Math.max(0, Math.min(width - 1, (x + .5) * width / INPUT_SIZE - .5));
+        const x0 = Math.floor(sourceX), x1 = Math.min(width - 1, x0 + 1), fx = sourceX - x0;
+        const topLeft = (y0 * width + x0) * 4, topRight = (y0 * width + x1) * 4;
+        const bottomLeft = (y1 * width + x0) * 4, bottomRight = (y1 * width + x1) * 4;
         const target = y * INPUT_SIZE + x;
+        const sample = channel => {
+          const top = rgba[topLeft + channel] * (1 - fx) + rgba[topRight + channel] * fx;
+          const bottom = rgba[bottomLeft + channel] * (1 - fx) + rgba[bottomRight + channel] * fx;
+          return (top * (1 - fy) + bottom * fy) / 255;
+        };
         // DocAligner's reference pipeline feeds OpenCV BGR pixels to the model.
-        data[target] = rgba[source + 2] / 255;
-        data[plane + target] = rgba[source + 1] / 255;
-        data[plane * 2 + target] = rgba[source] / 255;
+        data[target] = sample(2);
+        data[plane + target] = sample(1);
+        data[plane * 2 + target] = sample(0);
       }
     }
     return new Tensor('float32', data, [1, 3, INPUT_SIZE, INPUT_SIZE]);
@@ -29,6 +37,9 @@
     const mapHeight = dims[2], mapWidth = dims[3], channelSize = mapWidth * mapHeight;
     const points = [];
     for (let channel = 0; channel < 4; channel++) {
+      let peak = -Infinity;
+      for (let i = 0; i < channelSize; i++) peak = Math.max(peak, tensor.data[channel * channelSize + i]);
+      if (peak < .25) throw new Error(`Corner ${channel + 1} confidence is too low`);
       const center = largestComponent(tensor.data, channel * channelSize, mapWidth, mapHeight, .3);
       points.push({
         x: (center.x + .5) * width / mapWidth,

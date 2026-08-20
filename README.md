@@ -2,9 +2,9 @@
 
 An installable, offline-capable photo straightener. It detects the edges of a photographed print, lets the user refine all four corners, and performs perspective correction entirely in the browser.
 
-Boundary detection runs DocAligner's LCNet100 corner-heatmap model locally in a Web Worker using ONNX Runtime Web. Its initial four-corner estimate is refined against the image's full line gradients before the perspective correction is rendered. There is no automatic backup detector: a model failure is reported explicitly and the editor opens with manual corners.
+Boundary detection runs DocAligner's full-precision FastViT-SA24 corner-heatmap model locally in a Web Worker using ONNX Runtime Web. The 79 MB model replaces the much less capable LCNet100 checkpoint. Its initial four-corner estimate is refined against the image's full line gradients before the perspective correction is rendered. There is no automatic backup detector: a model failure is reported explicitly and the editor opens with manual corners.
 
-The model and runtime are pre-cached with the rest of the versioned PWA, warmed while the start screen is idle, and never upload the user's photo.
+The runtime is pre-cached with the versioned app shell. The model streams on first use with visible percentage feedback, is stored in the same versioned PWA cache, and is warmed while the start screen is idle. Photos are never uploaded.
 
 ## Run locally
 

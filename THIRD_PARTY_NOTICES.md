@@ -1,12 +1,12 @@
 # Third-party notices
 
-## DocAligner / LCNet100 model
+## DocAligner / FastViT-SA24 model
 
-The `docaligner-lcnet100.onnx` model is the DocAligner LCNet100 heatmap-regression model distributed by PageScan. DocAligner and the model weights are licensed under the Apache License 2.0.
+The `docaligner-fastvit-sa24.onnx` model is the unmodified DocAligner FastViT-SA24 heatmap-regression model distributed by PageScan. DocAligner and the model weights are licensed under the Apache License 2.0.
 
 - Source: https://github.com/DocsaidLab/DocAligner
 - Weights: https://huggingface.co/7rplus/pagescan-weights
-- Model SHA-256: `f4117b786e3a18470f3865c93f3c2bd69d9b998edd60f385574a5c665e79594e`
+- Model SHA-256: `7f9f5a8935b2eb22b3ee0245d34996063f54562df390d34714af2d76928695bc`
 - License: https://www.apache.org/licenses/LICENSE-2.0
 
 ## ONNX Runtime Web
